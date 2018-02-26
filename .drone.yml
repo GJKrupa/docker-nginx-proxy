@@ -1,19 +1,35 @@
-pipeline:
+workspace:
+  base: /workdir
 
-  build_image:
-    image: quay.io/ukhomeofficedigital/centos-base:latest
+pipeline:
+  # build_and_test_image:
+  #   image: docker:17.12.0 # not sure why it needed to use a centos base image
+  #   environment:
+  #     - DOCKER_HOST=tcp://172.17.0.1:2375
+  #   commands:
+  #     - apk update
+  #     - apk add bash curl openssl wget
+  #     - ./ci-build.sh
+  #   when:
+  #     event: [pull_request, push, tag]
+
+  build_and_test_image:
+    image: quay.io/ukhomeofficedigital/centos-base:v0.5.7 # testing with a centos image
     environment:
-      - DOCKER_HOST=tcp://127.0.0.1:2375
+      - DOCKER_HOST=tcp://172.17.0.1:2375
     commands:
+      - yum update -y
       - yum install -y -q docker openssl wget
       - ./ci-build.sh
     when:
       event: [pull_request, push, tag]
 
-  push_image:
-    image: docker:1.11
+  push_image_to_artifactory:
+    image: docker:17.12.0
+    secrets:
+      - docker_password # to be added
     environment:
-      - DOCKER_HOST=tcp://127.0.0.1:2375
+      - DOCKER_HOST=tcp://172.17.0.1:2375
       - DOCKER_IMAGE=nginx-proxy
       - DOCKER_REPO=artifactory-internal.digital.homeoffice.gov.uk
       - DOCKER_BASEDIR=/
@@ -25,9 +41,11 @@ pipeline:
       event: tag
 
   push_image_to_quay:
-    image: docker:1.11
+    image: docker:17.12.0
+    secrets:
+      - docker_quay_password # to be added
     environment:
-      - DOCKER_HOST=tcp://127.0.0.1:2375
+      - DOCKER_HOST=tcp://172.17.0.1:2375
       - DOCKER_IMAGE=nginx-proxy
       - DOCKER_REPO=quay.io
       - DOCKER_BASEDIR=/ukhomeofficedigital/
@@ -37,11 +55,3 @@ pipeline:
       - ./publish.sh "ngx" "${DOCKER_REPO}${DOCKER_BASEDIR}${DOCKER_IMAGE}" "${DRONE_TAG}"
     when:
       event: tag
-
-services:
-  dind:
-    image: docker:1.13-dind
-    privileged: true
-    command:
-      - "-s"
-      - "overlay"
